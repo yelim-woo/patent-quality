@@ -508,11 +508,10 @@ def build_dashboard_data(records, categories, year_info):
             key = f"{oid}_{sid}"
             period_vals = [os_matrix.get(key, {}).get(p["period"], 0) for p in periods]
             total = sum(period_vals)
-            # Growth rate: annual avg of latest non-zero period vs first non-zero period
+            # Growth rate: latest non-zero annual avg / first non-zero annual avg
             annuals = [period_vals[i] / period_spans[i] for i in range(len(period_vals))]
-            # Ratio: latest / earliest non-zero annual, or 0 if no baseline
             first_nz = next((a for a in annuals if a > 0), 0)
-            latest_nz = annuals[-1] if annuals else 0
+            latest_nz = next((a for a in reversed(annuals) if a > 0), 0)
             growth_ratio = (latest_nz / first_nz) if first_nz > 0 else 0
             # Early presence: sum of period 1+2
             early_sum = sum(period_vals[:2])
@@ -652,7 +651,8 @@ def build_detail_os(records, categories, periods, period_spans, log):
             total = sum(pvals)
             annuals = [pvals[i] / period_spans[i] for i in range(len(pvals))]
             first_nz = next((a for a in annuals if a > 0), 0)
-            growth_ratio = (annuals[-1] / first_nz) if first_nz > 0 else 0
+            latest_nz = next((a for a in reversed(annuals) if a > 0), 0)
+            growth_ratio = (latest_nz / first_nz) if first_nz > 0 else 0
             early_sum = sum(pvals[:2])
             raw_cells.append({
                 "objectId": oid, "objectName": d_obj_names.get(oid, oid),

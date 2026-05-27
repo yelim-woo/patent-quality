@@ -227,10 +227,13 @@ def main():
     periods = compute_periods(all_years)
     df["_period"] = df["_year"].apply(lambda y: year_to_period(y, periods))
 
+    unmatched = df["_period"].isna().sum()
     log(f"year range: {min(all_years)}~{max(all_years)}")
     for p in periods:
         cnt = (df["_period"] == p["period"]).sum()
         log(f"  {p['label']}: {cnt}건")
+    if unmatched > 0:
+        log(f"  WARNING: {unmatched}건이 어떤 구간에도 매칭되지 않음")
 
     # Extract text fields
     records = []
