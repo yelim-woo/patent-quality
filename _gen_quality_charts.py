@@ -605,6 +605,245 @@ def build_dashboard_data(records, categories, year_info):
     }
 
 
+# ---- Chart 4: Detail O/S Matrix Overall (Heatmap) ----
+def render_detail_os_matrix(records, categories, output_path):
+    """Heatmap of detailed Object × Solution categories."""
+    d_obj = categories.get("detail_object_categories", [])
+    d_sol = categories.get("detail_solution_categories", [])
+    if not d_obj or not d_sol:
+        log("  WARN: detail O/S categories not defined, skipping chart 4")
+        return None
+
+    for c in d_obj:
+        c["_pattern"] = build_keyword_pattern(c.get("keywords", []))
+    for c in d_sol:
+        c["_pattern"] = build_keyword_pattern(c.get("keywords", []))
+
+    # Classify
+    matrix = defaultdict(lambda: defaultdict(int))
+    total_classified = 0
+    for rec in records:
+        if not rec.get("problem") or not rec.get("solution"):
+            continue
+        o_matched = classify_text(rec["problem"], d_obj)
+        s_matched = classify_text(rec["solution"], d_sol)
+        if not o_matched or not s_matched:
+            continue
+        for oid in o_matched:
+            for sid in s_matched:
+                matrix[oid][sid] += 1
+        total_classified += 1
+
+    obj_ids = [c["id"] for c in d_obj]
+    sol_ids = [c["id"] for c in d_sol]
+    obj_names = {c["id"]: c["name"] for c in d_obj}
+    sol_names = {c["id"]: c["name"] for c in d_sol}
+
+    data = np.zeros((len(obj_ids), len(sol_ids)))
+    for i, oid in enumerate(obj_ids):
+        for j, sid in enumerate(sol_ids):
+            data[i][j] = matrix[oid].get(sid, 0)
+
+    # Render — larger figure for 10-14 categories
+    fig_h = max(FIG_H, 9 + len(obj_ids) * 0.3)
+    fig, ax = plt.subplots(figsize=(FIG_W, fig_h))
+
+    vmax = data.max() if data.max() > 0 else 1
+    im = ax.imshow(data, cmap=HEATMAP_CMAP, aspect="auto", vmin=0, vmax=vmax)
+
+    for i in range(len(obj_ids)):
+        for j in range(len(sol_ids)):
+            val = int(data[i][j])
+            if val > 0:
+                color = "white" if val > vmax * 0.6 else "black"
+                fontsize = 10 if len(sol_ids) <= 10 else 8
+                ax.text(j, i, str(val), ha="center", va="center",
+                        fontsize=fontsize, fontweight="bold", color=color)
+
+    ax.set_xticks(range(len(sol_ids)))
+    ax.set_xticklabels([sol_names.get(s, s) for s in sol_ids], rotation=40, ha="right", fontsize=9)
+    ax.set_yticks(range(len(obj_ids)))
+    ax.set_yticklabels([obj_names.get(o, o) for o in obj_ids], fontsize=9)
+    ax.set_xlabel("Solution (해결수단) — 세부", fontsize=13, fontweight="bold")
+    ax.set_ylabel("Object (해결과제) — 세부", fontsize=13, fontweight="bold")
+    ax.set_title("O/S Matrix 세부 전체 현황", fontsize=18, fontweight="bold", pad=20)
+
+    cbar = fig.colorbar(im, ax=ax, shrink=0.8, pad=0.02)
+    cbar.set_label("특허 건수", fontsize=11)
+
+    plt.tight_layout()
+    fig.savefig(output_path, dpi=DPI, bbox_inches="tight", facecolor="white")
+    plt.close(fig)
+    log(f"  chart_q4.png saved")
+
+    # Stats
+    stats = {
+        "chart_id": "q4",
+        "title": "O/S Matrix 세부 전체 현황",
+        "total_classified": total_classified,
+        "object_categories": [obj_names.get(o, o) for o in obj_ids],
+        "solution_categories": [sol_names.get(s, s) for s in sol_ids],
+        "top_cells": [],
+        "blank_cells": [],
+    }
+    cells = []
+    for i, oid in enumerate(obj_ids):
+        for j, sid in enumerate(sol_ids):
+            cells.append((obj_names.get(oid, oid), sol_names.get(sid, sid), int(data[i][j])))
+    cells.sort(key=lambda x: x[2], reverse=True)
+    stats["top_cells"] = [{"object": c[0], "solution": c[1], "count": c[2]} for c in cells[:10]]
+    stats["blank_cells"] = [{"object": c[0], "solution": c[1]} for c in cells if c[2] == 0]
+    return stats
+
+
+# ---- Chart 5: Detail O/S Matrix by Period (2x2 subplot) ----
+def render_detail_os_period(records, categories, year_info, output_path):
+    """2×2 heatmap subplots showing detail O/S matrix per period."""
+    d_obj = categories.get("detail_object_categories", [])
+    d_sol = categories.get("detail_solution_categories", [])
+    periods = year_info.get("periods", [])
+
+    if not d_obj or not d_sol or not periods:
+        log("  WARN: insufficient data for detail period chart, skipping chart 5")
+        return None
+
+    for c in d_obj:
+        c["_pattern"] = build_keyword_pattern(c.get("keywords", []))
+    for c in d_sol:
+        c["_pattern"] = build_keyword_pattern(c.get("keywords", []))
+
+    obj_ids = [c["id"] for c in d_obj]
+    sol_ids = [c["id"] for c in d_sol]
+    obj_names = {c["id"]: c["name"] for c in d_obj}
+    sol_names = {c["id"]: c["name"] for c in d_sol}
+
+    period_matrices = {}
+    for p in periods:
+        period_matrices[p["period"]] = defaultdict(lambda: defaultdict(int))
+
+    for rec in records:
+        if not rec.get("problem") or not rec.get("solution") or rec.get("period") is None:
+            continue
+        o_matched = classify_text(rec["problem"], d_obj)
+        s_matched = classify_text(rec["solution"], d_sol)
+        if not o_matched or not s_matched:
+            continue
+        for oid in o_matched:
+            if oid not in obj_ids:
+                continue
+            for sid in s_matched:
+                if sid not in sol_ids:
+                    continue
+                period_matrices[rec["period"]][oid][sid] += 1
+
+    subplot_count = min(4, len(periods))
+    nrows = 2 if subplot_count > 2 else 1
+    ncols = 2
+
+    period_data = {}
+    global_max = 0
+    for p in periods[:4]:
+        mat = np.zeros((len(obj_ids), len(sol_ids)))
+        for i, oid in enumerate(obj_ids):
+            for j, sid in enumerate(sol_ids):
+                mat[i][j] = period_matrices[p["period"]][oid].get(sid, 0)
+        period_data[p["period"]] = mat
+        if mat.max() > global_max:
+            global_max = mat.max()
+
+    if global_max == 0:
+        global_max = 1
+
+    fig_h = max(FIG_H, 9 + len(obj_ids) * 0.2)
+    fig, axes = plt.subplots(nrows, ncols, figsize=(FIG_W, fig_h))
+    if nrows == 1:
+        axes = np.array([axes]) if ncols > 1 else np.array([[axes]])
+    axes_flat = axes.flatten()
+
+    for idx, p in enumerate(periods[:4]):
+        if idx >= len(axes_flat):
+            break
+        ax = axes_flat[idx]
+        mat = period_data[p["period"]]
+        im = ax.imshow(mat, cmap=PERIOD_CMAPS[idx % len(PERIOD_CMAPS)],
+                       aspect="auto", vmin=0, vmax=global_max)
+
+        fontsize = 7 if len(sol_ids) > 10 else 8
+        for i in range(len(obj_ids)):
+            for j in range(len(sol_ids)):
+                val = int(mat[i][j])
+                if val > 0:
+                    color = "white" if val > global_max * 0.6 else "black"
+                    indicator = ""
+                    if idx > 0:
+                        prev_p = periods[idx - 1]
+                        prev_val = period_data[prev_p["period"]][i][j]
+                        if prev_val == 0 and val > 0:
+                            indicator = " ★"
+                        elif prev_val > 0 and val >= prev_val * 2:
+                            indicator = " ▲"
+                        elif prev_val > 0 and val > prev_val:
+                            indicator = " △"
+                    ax.text(j, i, f"{val}{indicator}", ha="center", va="center",
+                            fontsize=fontsize, fontweight="bold", color=color)
+
+        label_len = 5 if len(sol_ids) > 10 else 6
+        ax.set_xticks(range(len(sol_ids)))
+        ax.set_xticklabels([sol_names.get(s, s)[:label_len] for s in sol_ids],
+                           rotation=40, ha="right", fontsize=7)
+        ax.set_yticks(range(len(obj_ids)))
+        ax.set_yticklabels([obj_names.get(o, o)[:7] for o in obj_ids], fontsize=7)
+        ax.set_title(p["label"], fontsize=12, fontweight="bold", pad=8)
+
+    for idx in range(len(periods[:4]), len(axes_flat)):
+        axes_flat[idx].set_visible(False)
+
+    fig.suptitle("O/S Matrix 세부 구간별 변화", fontsize=18, fontweight="bold", y=1.02)
+    legend_text = "★ 신규 출현  ▲ 급상승(2배↑)  △ 성장"
+    fig.text(0.5, -0.02, legend_text, ha="center", fontsize=11,
+             style="italic", color="#555555")
+
+    plt.tight_layout()
+    fig.savefig(output_path, dpi=DPI, bbox_inches="tight", facecolor="white")
+    plt.close(fig)
+    log(f"  chart_q5.png saved")
+
+    # Stats
+    stats = {
+        "chart_id": "q5",
+        "title": "O/S Matrix 세부 구간별 변화",
+        "periods": [p["label"] for p in periods[:4]],
+        "growth_cells": [],
+        "new_cells": [],
+        "blank_cells": [],
+    }
+    for i, oid in enumerate(obj_ids):
+        for j, sid in enumerate(sol_ids):
+            vals = [int(period_data[p["period"]][i][j]) for p in periods[:4]]
+            o_name = obj_names.get(oid, oid)
+            s_name = sol_names.get(sid, sid)
+            if all(v == 0 for v in vals):
+                stats["blank_cells"].append({"object": o_name, "solution": s_name})
+            elif len(vals) >= 2:
+                for k in range(1, len(vals)):
+                    if vals[k-1] > 0 and vals[k] >= vals[k-1] * 2:
+                        stats["growth_cells"].append({
+                            "object": o_name, "solution": s_name,
+                            "from_period": periods[k-1]["label"],
+                            "to_period": periods[k]["label"],
+                            "from_val": vals[k-1], "to_val": vals[k],
+                            "type": "급상승",
+                        })
+                    elif vals[k-1] == 0 and vals[k] > 0:
+                        stats["new_cells"].append({
+                            "object": o_name, "solution": s_name,
+                            "period": periods[k]["label"],
+                            "count": vals[k],
+                            "type": "신규",
+                        })
+    return stats
+
+
 def build_detail_os(records, categories, periods, period_spans, log):
     """Build detailed O/S matrix from detail_object/solution_categories."""
     d_obj = categories.get("detail_object_categories", [])
@@ -733,7 +972,9 @@ def main():
 
     log(f"loaded: {len(records)} records, {len(categories.get('tech_themes', []))} themes, "
         f"{len(categories.get('object_categories', []))} O-cats, "
-        f"{len(categories.get('solution_categories', []))} S-cats")
+        f"{len(categories.get('solution_categories', []))} S-cats, "
+        f"{len(categories.get('detail_object_categories', []))} detail-O, "
+        f"{len(categories.get('detail_solution_categories', []))} detail-S")
 
     # Chart 1: Tech Flow
     log("rendering chart 1: 기술흐름도...")
@@ -755,6 +996,20 @@ def main():
     if stats3:
         with open(assets / "stats_q3.json", "w", encoding="utf-8") as f:
             json.dump(stats3, f, ensure_ascii=False, indent=2)
+
+    # Chart 4: Detail O/S Matrix Overall
+    log("rendering chart 4: O/S Matrix 세부 전체...")
+    stats4 = render_detail_os_matrix(records, categories, assets / "chart_q4.png")
+    if stats4:
+        with open(assets / "stats_q4.json", "w", encoding="utf-8") as f:
+            json.dump(stats4, f, ensure_ascii=False, indent=2)
+
+    # Chart 5: Detail O/S Matrix by Period
+    log("rendering chart 5: O/S Matrix 세부 구간별...")
+    stats5 = render_detail_os_period(records, categories, year_info, assets / "chart_q5.png")
+    if stats5:
+        with open(assets / "stats_q5.json", "w", encoding="utf-8") as f:
+            json.dump(stats5, f, ensure_ascii=False, indent=2)
 
     # ---- Dashboard JSON (interactive Sankey + O/S Matrix) ----
     log("generating dashboard_data.json...")

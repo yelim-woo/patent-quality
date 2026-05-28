@@ -61,19 +61,29 @@ Stage A 완료 후, Claude는 다음을 수행:
 2. `_quality_assets/sample_os.json` 읽기
 3. `_quality_assets/year_info.json` 읽기
 
-샘플 텍스트를 분석하여 아래 3가지 카테고리를 정의:
+샘플 텍스트를 분석하여 아래 5가지 카테고리를 정의:
 
 #### (1) 기술 주제 (tech_themes) — 기술흐름도용
 - 5~8개 주제 정의
 - 각 주제별 대표 키워드 리스트 (한국어 + 영어, 주제당 10~20개)
 - 키워드는 요약 텍스트에서 매칭 가능한 핵심 기술 용어
 
-#### (2) Object 카테고리 (object_categories) — O/S Matrix용
+#### (2) Object 카테고리 (object_categories) — O/S Matrix 대분류용
 - 5~8개 해결과제 유형 정의
 - 각 카테고리별 키워드 리스트 (한국어 + 영어, 10~15개)
 
-#### (3) Solution 카테고리 (solution_categories) — O/S Matrix용
+#### (3) Solution 카테고리 (solution_categories) — O/S Matrix 대분류용
 - 5~8개 해결수단 유형 정의
+- 각 카테고리별 키워드 리스트 (한국어 + 영어, 10~15개)
+
+#### (4) 세부 Object 카테고리 (detail_object_categories) — O/S Matrix 세부용
+- 10~14개 해결과제 세부 유형 정의
+- (2)의 대분류를 세분화하여 더 구체적인 기술 과제로 분류
+- 각 카테고리별 키워드 리스트 (한국어 + 영어, 10~15개)
+
+#### (5) 세부 Solution 카테고리 (detail_solution_categories) — O/S Matrix 세부용
+- 10~14개 해결수단 세부 유형 정의
+- (3)의 대분류를 세분화하여 더 구체적인 기술 수단으로 분류
 - 각 카테고리별 키워드 리스트 (한국어 + 영어, 10~15개)
 
 결과를 `_quality_assets/categories.json`으로 저장:
@@ -100,6 +110,20 @@ Stage A 완료 후, Claude는 다음을 수행:
       "name": "카테고리명",
       "keywords": ["키워드1", "keyword2", ...]
     }
+  ],
+  "detail_object_categories": [
+    {
+      "id": "DO1",
+      "name": "세부 카테고리명",
+      "keywords": ["키워드1", "keyword2", ...]
+    }
+  ],
+  "detail_solution_categories": [
+    {
+      "id": "DS1",
+      "name": "세부 카테고리명",
+      "keywords": ["키워드1", "keyword2", ...]
+    }
   ]
 }
 ```
@@ -119,17 +143,19 @@ Stage A 완료 후, Claude는 다음을 수행:
 python "${CLAUDE_SKILL_DIR}/_gen_quality_charts.py" <폴더>
 ```
 
-출력: `_quality_assets/chart_q{1..3}.png` + `stats_q{1..3}.json`
+출력: `_quality_assets/chart_q{1..5}.png` + `stats_q{1..5}.json`
 
-**3개 차트 구성:**
+**5개 차트 구성:**
 
 | # | 제목 | 차트 타입 | 데이터 |
 |---|------|-----------|--------|
 | q1 | 연도별 기술흐름도 | Stacked area chart | 요약 텍스트 → 기술 주제별 연도 추이 |
-| q2 | O/S Matrix 전체 현황 | Heatmap | 해결과제 × 해결수단 빈도 |
-| q3 | O/S Matrix 구간별 변화 | 2×2 subplot heatmap | 4구간별 O/S 빈도 + 성장/공백 표시 |
+| q2 | O/S Matrix 전체 현황 | Heatmap | 해결과제 × 해결수단 빈도 (대분류) |
+| q3 | O/S Matrix 구간별 변화 | 2×2 subplot heatmap | 4구간별 O/S 빈도 + 성장/공백 표시 (대분류) |
+| q4 | O/S Matrix 세부 전체 현황 | Heatmap | 해결과제 × 해결수단 빈도 (세부) |
+| q5 | O/S Matrix 세부 구간별 변화 | 2×2 subplot heatmap | 4구간별 O/S 빈도 + 성장/공백 표시 (세부) |
 
-차트 q3의 표시 기호:
+차트 q3/q5의 표시 기호:
 - ★ 신규 출현 (이전 구간 0 → 현 구간 >0)
 - ▲ 급상승 (이전 대비 2배 이상 증가)
 - △ 성장 (이전 대비 증가)
@@ -140,14 +166,14 @@ python "${CLAUDE_SKILL_DIR}/_gen_quality_charts.py" <폴더>
 
 Stage A2 완료 후, Claude는:
 
-1. `_quality_assets/stats_q{1..3}.json` 3개를 Read
+1. `_quality_assets/stats_q{1..5}.json` 5개를 Read
 2. 각 차트마다 **3~5개 불릿 문장** 작성
 3. 문체 규칙:
    - 각 불릿은 `○ `로 시작
    - 수치를 구체적으로 인용
    - 마지막 불릿은 시사점/해석
    - 개조식 종결: `~함`, `~나타남`, `~추세를 보임`
-4. 결과를 `_quality_assets/bullets_q{1..3}.json`으로 저장:
+4. 결과를 `_quality_assets/bullets_q{1..5}.json`으로 저장:
 
 ```json
 {
@@ -162,7 +188,7 @@ Stage A2 완료 후, Claude는:
 ```
 
 **장 번호 및 그림 번호 체계:**
-- Chapter 5 정성분석: q1, q2, q3 → 그림 5-1, 5-2, 5-3
+- Chapter 5 정성분석: q1, q2, q3, q4, q5 → 그림 5-1, 5-2, 5-3, 5-4, 5-5
 
 ---
 
@@ -185,10 +211,10 @@ Claude는 다음 순서로 진행한다:
 1. 대시보드 상태 파일 저장 (stage3-state.json)
 2. python _extract_texts.py <폴더>
 3. sample_summary.json, sample_os.json, year_info.json 읽기
-4. categories.json 작성 (Write)
+4. categories.json 작성 (Write) — tech_themes, object/solution_categories, detail_object/solution_categories 모두 포함
 5. python _gen_quality_charts.py <폴더>
-6. stats_q{1..3}.json 3개 읽기
-7. bullets_q{1..3}.json 3개 작성 (Write)
+6. stats_q{1..5}.json 5개 읽기
+7. bullets_q{1..5}.json 5개 작성 (Write)
 8. python _gen_quality_report.py <폴더>
 9. 최종 Quality_report.hwpx 경로 안내
 10. 웹 대시보드 안내: http://localhost:$PORT/stage3
@@ -232,7 +258,7 @@ npx next dev --hostname 0.0.0.0 --port $PORT &
 
 ### 주의사항
 
-- **1개 장 구조**: Chapter 5 "정성분석" (3페이지)
+- **1개 장 구조**: Chapter 5 "정성분석" (5페이지)
 - **mimetype 파일**: HWPX ZIP은 `mimetype`이 첫 엔트리이며 **무압축(ZIP_STORED)**이어야 함
 - **문자 이스케이프**: 본문에 `<`, `>`, `&` 들어가면 XML-escape 필수
 - **이미지 크기**: PNG 렌더 시 `figsize=(16,9)`, `dpi=110` (1760x990)으로 고정
@@ -243,4 +269,4 @@ npx next dev --hostname 0.0.0.0 --port $PORT &
   - 🔵 공백: 건수 하위 25%
   - 🟡 신규: 초기 존재감(1+2구간 합계) 하위 10% + 성장률 중간 이상
   - ⚪ 무의미: 모든 구간 0건
-- **세부 O/S Matrix**: `detail_object_categories`, `detail_solution_categories`를 categories.json에 추가하면 14×14 세부 매트릭스가 대시보드에 자동 생성됨
+- **세부 O/S Matrix**: `detail_object_categories`, `detail_solution_categories`로 10~14개씩 세부 분류하여 차트 q4/q5 및 대시보드 세부 탭에 자동 반영

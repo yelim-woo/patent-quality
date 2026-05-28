@@ -12,11 +12,13 @@ _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 _TREND_DIR = os.path.join(os.path.dirname(_SCRIPT_DIR), "patent-trend")
 TEMPLATE = os.environ.get("HWPX_TEMPLATE", os.path.join(_TREND_DIR, "양식.hwpx"))
 
-CHART_IDS = ["q1", "q2", "q3"]
+CHART_IDS = ["q1", "q2", "q3", "q4", "q5"]
 CHART_LABELS = {
     "q1": ("1. 연도별 기술흐름도", "<그림 5-1> 연도별 기술흐름도"),
     "q2": ("2. O/S Matrix 전체 현황", "<그림 5-2> O/S Matrix 전체 현황"),
     "q3": ("3. O/S Matrix 구간별 변화", "<그림 5-3> O/S Matrix 구간별 변화"),
+    "q4": ("4. O/S Matrix 세부 전체 현황", "<그림 5-4> O/S Matrix 세부 전체 현황"),
+    "q5": ("5. O/S Matrix 세부 구간별 변화", "<그림 5-5> O/S Matrix 세부 구간별 변화"),
 }
 
 def log(msg):
